@@ -123,3 +123,29 @@ def register(mcp: FastMCP) -> None:
         Devuelve un dict con el perfil completo del atleta.
         """
         return await _get("/api/tp/athlete")
+
+    @mcp.tool
+    async def coach_get_nutrition(from_date: str, to_date: str) -> Any:
+        """Devuelve macros diarios completos (calorías, proteína, carbos, grasa, fibra, sodio), goals, target adaptativo de calorías, y consumo de alcohol entre dos fechas.
+
+        Úsalo cuando el usuario pregunte por adherencia al plan nutricional, déficit/superávit, evolución de proteína, ingesta de alcohol, o cualquier análisis de macros con detalle. Para una visión rápida del estado general (entrenamiento + recovery + nutrición agregada) usa coach_get_training_state.
+
+        Devuelve lista de dicts por día con: date, calories, protein_g, carbs_g, fat_g, fiber_g, sodium_mg, calories_goal, protein_goal_g, alcohol_drinks, calories_target_adaptive.
+        """
+        return await _get(
+            "/api/nutrition",
+            params={"from_date": from_date, "to_date": to_date},
+        )
+
+    @mcp.tool
+    async def coach_get_body_composition(from_date: str, to_date: str) -> Any:
+        """Devuelve peso y porcentaje de grasa corporal por día entre dos fechas. La fuente combina Fitbit y MFP weight tracking.
+
+        Úsalo SOLO cuando el usuario pregunte específicamente por evolución de peso, % grasa corporal, o composición corporal. Para métricas generales del día (HRV, sueño, body battery, peso puntual) usa coach_get_metrics — esa también incluye peso.
+
+        Devuelve lista de dicts por día con: date, weight_kg, body_fat_pct.
+        """
+        return await _get(
+            "/api/body-composition",
+            params={"from_date": from_date, "to_date": to_date},
+        )
