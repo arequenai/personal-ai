@@ -30,7 +30,7 @@ cp .env.example .env
 python -m server.main
 ```
 
-Server listens on `http://localhost:8000`. MCP endpoint is `/mcp` (no trailing slash). Health check at `/health`.
+Server listens on `http://localhost:8000`. MCP endpoint is `/mcp/<MCP_SECRET>` — the secret is in the URL path itself, so the full URL acts as the credential. Health check at `/health`.
 
 ## Deploy to Railway
 
@@ -43,7 +43,11 @@ Server listens on `http://localhost:8000`. MCP endpoint is `/mcp` (no trailing s
 
 ## Connect to Claude.ai
 
+Claude.ai's custom connector UI only supports OAuth, not arbitrary bearer headers. To stay simple, the secret lives in the URL path instead — anyone with the full URL has full access.
+
 1. In Claude (web or mobile): Settings → Connectors → Add custom connector.
-2. URL: `https://<your-railway-app>/mcp` (no trailing slash — FastMCP redirects `/mcp/` → `/mcp` and the redirect drops the bearer token).
-3. Authentication: Bearer token. Paste the value of `MCP_SECRET`.
+2. URL: `https://<your-railway-app>/mcp/<MCP_SECRET>` — substitute both placeholders with your actual values.
+3. Leave authentication empty (or whatever the UI defaults to).
 4. Save. The 6 `coach_*` tools should appear in the connector's tool list.
+
+> **Security note.** The URL itself is the credential. Treat it like a password: don't paste it in chats, screenshots, public bug reports, or commit it anywhere. If it leaks, generate a new `MCP_SECRET`, update the Railway env var, and re-add the connector in Claude.ai.
