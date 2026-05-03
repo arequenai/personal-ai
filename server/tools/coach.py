@@ -138,6 +138,20 @@ def register(mcp: FastMCP) -> None:
         )
 
     @mcp.tool
+    async def coach_get_meals(date: str) -> dict:
+        """Devuelve el detalle de comidas individuales registradas en MyFitnessPal para un día concreto, agrupadas por tipo de comida (desayuno, comida, cena, snacks, other) con macros por entry cuando MFP los tiene.
+
+        Úsalo cuando el usuario pregunte qué comió en un día concreto, de dónde vino un pico de calorías o de un macro específico, o quiera revisar la composición real de comidas (no solo los totales).
+
+        Para totales agregados de macros en un rango de fechas usa coach_get_nutrition. Para una visión integral del día con entrenamiento + recovery + nutrición agregada usa coach_get_training_state.
+
+        Args:
+            date: Fecha en formato YYYY-MM-DD.
+
+        Devuelve un dict con date, meals (agrupado por tipo: breakfast/lunch/dinner/snacks/other, cada uno una lista de entries con name/calories/protein_g/carbs_g/fat_g/position) y totals."""
+        return await _get(f"/api/nutrition/{date}/meals")
+
+    @mcp.tool
     async def coach_get_body_composition(from_date: str, to_date: str) -> Any:
         """Devuelve peso y porcentaje de grasa corporal por día entre dos fechas. La fuente combina Fitbit y MFP weight tracking.
 
