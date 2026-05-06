@@ -181,6 +181,26 @@ async def test_log_meal_full(mcp_server, api_mock):
     }
 
 
+async def test_log_meal_conflict_409(mcp_server, api_mock):
+    api_mock.post("/api/nutrition/log").mock(
+        return_value=Response(
+            409,
+            json={"detail": "Entry already exists for mfp_id=12345 on 2026-05-06"},
+        )
+    )
+
+    async with Client(mcp_server) as client:
+        result = await client.call_tool(
+            "coach_log_meal",
+            {"mfp_id": 12345, "meal_type": "breakfast"},
+        )
+
+    body_out = _payload(result)
+    assert body_out["conflict"] is True
+    assert "Entry already exists" in body_out["detail"]
+    assert "force=True" in body_out["hint"]
+
+
 async def test_delete_diary_entry(mcp_server, api_mock):
     route = api_mock.delete("/api/nutrition/entry/uuid-3").mock(
         return_value=Response(204)

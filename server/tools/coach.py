@@ -233,6 +233,8 @@ def register(mcp: FastMCP) -> None:
             force: Por defecto False. Pasa True solo si el usuario confirma duplicar tras un 409.
 
         Devuelve un dict con: entry_id (UUID, guárdalo para borrar con coach_delete_diary_entry), mfp_id, food_name, meal_type, date, quantity, unit, weight_id, calories, protein_g, carbs_g, fat_g.
+
+        Si el aggregator responde 409 (idempotency conflict), en lugar de propagar la excepción se devuelve un dict {"conflict": True, "detail": str, "hint": str}. El cliente debe comprobar `if result.get("conflict"):` para decidir si pedir confirmación al usuario antes de reintentar con force=True. Otros 4xx/5xx siguen propagándose como HTTPStatusError.
         """
         body: dict[str, Any] = {
             "mfp_id": mfp_id,
@@ -244,7 +246,20 @@ def register(mcp: FastMCP) -> None:
             body["date"] = date
         if unit is not None:
             body["unit"] = unit
-        return await _post("/api/nutrition/log", body)
+        try:
+            return await _post("/api/nutrition/log", body)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 409:
+                try:
+                    detail = e.response.json().get("detail", "Entry already exists")
+                except (ValueError, KeyError):
+                    detail = "Entry already exists"
+                return {
+                    "conflict": True,
+                    "detail": detail,
+                    "hint": "Set force=True to bypass idempotency and create the duplicate anyway.",
+                }
+            raise
 
     @mcp.tool
     async def coach_delete_diary_entry(entry_id: str, date: str) -> dict:
