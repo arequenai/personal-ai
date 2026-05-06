@@ -51,3 +51,6 @@ Claude.ai's custom connector UI only supports OAuth, not arbitrary bearer header
 4. Save. The 6 `coach_*` tools should appear in the connector's tool list.
 
 > **Security note.** The URL itself is the credential. Treat it like a password: don't paste it in chats, screenshots, public bug reports, or commit it anywhere. If it leaks, generate a new `MCP_SECRET`, update the Railway env var, and re-add the connector in Claude.ai.
+
+<!-- deploy-access-check -->
+
