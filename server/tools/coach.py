@@ -1,5 +1,5 @@
 from datetime import date, timedelta
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 from fastmcp import FastMCP
@@ -14,6 +14,23 @@ async def _get(path: str, params: dict[str, Any] | None = None) -> Any:
         response = await client.get(path, params=params)
         response.raise_for_status()
         return response.json()
+
+
+async def _post(path: str, json_body: dict[str, Any]) -> Any:
+    async with httpx.AsyncClient(
+        base_url=settings.railway_api_base, timeout=30.0
+    ) as client:
+        response = await client.post(path, json=json_body)
+        response.raise_for_status()
+        return response.json()
+
+
+async def _delete(path: str, params: dict[str, Any] | None = None) -> None:
+    async with httpx.AsyncClient(
+        base_url=settings.railway_api_base, timeout=30.0
+    ) as client:
+        response = await client.delete(path, params=params)
+        response.raise_for_status()
 
 
 def register(mcp: FastMCP) -> None:
@@ -163,3 +180,86 @@ def register(mcp: FastMCP) -> None:
             "/api/body-composition",
             params={"from_date": from_date, "to_date": to_date},
         )
+
+    @mcp.tool
+    async def coach_search_food(query: str, limit: int = 10) -> Any:
+        """Busca alimentos en MyFitnessPal por nombre o marca y devuelve candidatos para loggear.
+
+        Úsalo como PRIMER paso cuando el usuario quiera registrar comida ("apunta una manzana", "logueo 100g de arroz"): obtienes los mfp_id que necesitan coach_get_food_details (para ver tamaños de ración) y coach_log_meal (para registrar).
+
+        Args:
+            query: Texto de búsqueda (nombre del alimento o marca). Sé específico ("plátano canario" mejor que "fruta").
+            limit: Máximo de resultados. Por defecto 10.
+
+        Devuelve una lista de dicts con: mfp_id, name, brand (puede ser null), verified, calories (para la ración por defecto).
+        """
+        return await _get(
+            "/api/nutrition/search",
+            params={"q": query, "limit": limit},
+        )
+
+    @mcp.tool
+    async def coach_get_food_details(mfp_id: int) -> Any:
+        """Devuelve macros y tamaños de ración disponibles de un alimento concreto en MyFitnessPal.
+
+        Úsalo TRAS coach_search_food cuando necesites: (a) ver los unit/serving disponibles para que el usuario elija ("¿lo logueo en gramos o por unidad?"), (b) calcular macros antes de loggear, (c) confirmar al usuario qué alimento se va a registrar. La response incluye un campo version requerido internamente para coach_log_meal.
+
+        Args:
+            mfp_id: ID numérico del alimento en MFP (lo devuelve coach_search_food).
+
+        Devuelve un dict con: mfp_id, name, brand, version, serving_sizes (lista de {weight_id, unit, value, multiplier, index, description}), calories_per_serving, protein_per_serving_g, carbs_per_serving_g, fat_per_serving_g.
+        """
+        return await _get(f"/api/nutrition/food/{mfp_id}")
+
+    @mcp.tool
+    async def coach_log_meal(
+        mfp_id: int,
+        meal_type: Literal["breakfast", "lunch", "dinner", "snacks"],
+        date: str | None = None,
+        quantity: float = 1.0,
+        unit: str | None = None,
+        force: bool = False,
+    ) -> Any:
+        """Registra una entrada de comida en el diario de MyFitnessPal y devuelve el entry creado con macros calculados.
+
+        Úsalo como paso FINAL del flujo de logging tras coach_search_food (+ opcionalmente coach_get_food_details para elegir unit). El aggregator es idempotente: si ya existe un entry equivalente devuelve 409 — en ese caso pregunta al usuario si quiere duplicarlo y reintenta con force=True. NO reintentes 409 automáticamente.
+
+        Args:
+            mfp_id: ID del alimento (de coach_search_food).
+            meal_type: Una de "breakfast", "lunch", "dinner", "snacks". No traduzcas: el aggregator solo acepta estos valores en inglés.
+            date: Fecha YYYY-MM-DD. Si se omite usa hoy en zona Europe/Madrid.
+            quantity: Cantidad de raciones. Por defecto 1.0.
+            unit: Descripción de la ración (ej "100 g", "1 medium"). Debe coincidir con un serving_sizes.description de coach_get_food_details. Si se omite usa la ración default del alimento.
+            force: Por defecto False. Pasa True solo si el usuario confirma duplicar tras un 409.
+
+        Devuelve un dict con: entry_id (UUID, guárdalo para borrar con coach_delete_diary_entry), mfp_id, food_name, meal_type, date, quantity, unit, weight_id, calories, protein_g, carbs_g, fat_g.
+        """
+        body: dict[str, Any] = {
+            "mfp_id": mfp_id,
+            "meal_type": meal_type,
+            "quantity": quantity,
+            "force": force,
+        }
+        if date is not None:
+            body["date"] = date
+        if unit is not None:
+            body["unit"] = unit
+        return await _post("/api/nutrition/log", body)
+
+    @mcp.tool
+    async def coach_delete_diary_entry(entry_id: str, date: str) -> dict:
+        """Borra una entrada del diario de MyFitnessPal por su entry_id.
+
+        Úsalo cuando el usuario pida deshacer un registro recién hecho ("quita esa manzana", "borra lo que acabo de loggear") o limpiar entries detectados con coach_get_meals. Necesitas el entry_id (devuelto por coach_log_meal o derivable de coach_get_meals) y la fecha del entry.
+
+        Args:
+            entry_id: UUID del entry en MFP.
+            date: Fecha YYYY-MM-DD del entry (la misma con la que se creó).
+
+        Devuelve un dict {success: True, entry_id, date}.
+        """
+        await _delete(
+            f"/api/nutrition/entry/{entry_id}",
+            params={"date": date},
+        )
+        return {"success": True, "entry_id": entry_id, "date": date}

@@ -12,6 +12,13 @@ All tools are namespaced `coach_*`:
 - `coach_get_workout_detail(workout_id)` — full detail for one workout.
 - `coach_get_metrics(from_date, to_date)` — daily HRV, sleep, body battery, nutrition.
 - `coach_get_athlete()` — athlete profile (zones, FTP, thresholds).
+- `coach_get_nutrition(from_date, to_date)` — daily macros + adaptive calorie target + alcohol.
+- `coach_get_meals(date)` — per-meal MFP entries grouped by meal type.
+- `coach_get_body_composition(from_date, to_date)` — daily weight and body fat %.
+- `coach_search_food(query, limit=10)` — search MFP foods by name/brand; returns mfp_id candidates.
+- `coach_get_food_details(mfp_id)` — macros + available serving sizes for one MFP food.
+- `coach_log_meal(mfp_id, meal_type, date=None, quantity=1.0, unit=None, force=False)` — log a diary entry; returns the created entry with computed macros.
+- `coach_delete_diary_entry(entry_id, date)` — remove a diary entry by id.
 
 ## Local dev
 
