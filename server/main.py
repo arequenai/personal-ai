@@ -3,11 +3,12 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from server.config import settings
-from server.tools import coach
+from server.tools import coach, finance
 
 mcp = FastMCP(name="personal-ai")
 
 coach.register(mcp)
+finance.register(mcp)
 
 
 @mcp.custom_route("/health", methods=["GET"])
