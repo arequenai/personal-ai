@@ -7,9 +7,15 @@ from fastmcp import FastMCP
 from server.config import settings
 
 
+def _auth_headers() -> dict[str, str]:
+    if settings.railway_api_key:
+        return {"X-API-Key": settings.railway_api_key}
+    return {}
+
+
 async def _get(path: str, params: dict[str, Any] | None = None) -> Any:
     async with httpx.AsyncClient(
-        base_url=settings.railway_api_base, timeout=30.0
+        base_url=settings.railway_api_base, timeout=30.0, headers=_auth_headers()
     ) as client:
         response = await client.get(path, params=params)
         response.raise_for_status()
@@ -18,7 +24,7 @@ async def _get(path: str, params: dict[str, Any] | None = None) -> Any:
 
 async def _post(path: str, json_body: dict[str, Any]) -> Any:
     async with httpx.AsyncClient(
-        base_url=settings.railway_api_base, timeout=30.0
+        base_url=settings.railway_api_base, timeout=30.0, headers=_auth_headers()
     ) as client:
         response = await client.post(path, json=json_body)
         response.raise_for_status()
@@ -27,7 +33,7 @@ async def _post(path: str, json_body: dict[str, Any]) -> Any:
 
 async def _delete(path: str, params: dict[str, Any] | None = None) -> None:
     async with httpx.AsyncClient(
-        base_url=settings.railway_api_base, timeout=30.0
+        base_url=settings.railway_api_base, timeout=30.0, headers=_auth_headers()
     ) as client:
         response = await client.delete(path, params=params)
         response.raise_for_status()
