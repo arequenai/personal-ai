@@ -199,3 +199,27 @@ async def test_delete_diary_entry(mcp_server, api_mock):
         "entry_id": "uuid-3",
         "date": "2026-05-06",
     }
+
+
+async def test_api_key_header_sent_when_configured(mcp_server, api_mock, monkeypatch):
+    monkeypatch.setattr(settings, "railway_api_key", "clave-test")
+    route = api_mock.get("/api/nutrition/search").mock(
+        return_value=Response(200, json={"results": []})
+    )
+
+    async with Client(mcp_server) as client:
+        await client.call_tool("coach_search_food", {"query": "banana"})
+
+    assert route.calls.last.request.headers["x-api-key"] == "clave-test"
+
+
+async def test_no_api_key_header_by_default(mcp_server, api_mock):
+    assert settings.railway_api_key == ""
+    route = api_mock.get("/api/nutrition/search").mock(
+        return_value=Response(200, json={"results": []})
+    )
+
+    async with Client(mcp_server) as client:
+        await client.call_tool("coach_search_food", {"query": "banana"})
+
+    assert "x-api-key" not in route.calls.last.request.headers
