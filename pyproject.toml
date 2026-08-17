@@ -30,3 +30,14 @@ include = ["server*"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Los docstrings de las tools son el prompt de enrutado que lee Claude:
+# se escriben en párrafos largos a propósito y no se parten por longitud.
+"server/tools/*.py" = ["E501"]
