@@ -1,6 +1,5 @@
 import json
 
-import httpx
 import pytest
 import respx
 from fastmcp import Client, FastMCP
@@ -218,7 +217,3 @@ async def test_aggregator_5xx_raises(mcp_server, api_mock):
 
     msg = str(exc_info.value)
     assert "500" in msg or "Internal Server Error" in msg or "HTTPStatusError" in msg
-
-
-def test_httpx_status_error_class_exists():
-    assert hasattr(httpx, "HTTPStatusError")

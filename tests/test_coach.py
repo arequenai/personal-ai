@@ -1,4 +1,5 @@
 import json
+from datetime import date, timedelta
 
 import pytest
 import respx
@@ -26,6 +27,248 @@ def api_mock():
 
 def _payload(result):
     return json.loads(result.content[0].text)
+
+
+async def test_get_training_state_default_window(mcp_server, api_mock):
+    payload = {
+        "training_load": [{"date": "2026-08-15", "ctl": 55.0, "atl": 60.0, "tsb": -5.0}],
+        "workouts": [],
+        "recovery": [],
+        "nutrition": [],
+    }
+    route = api_mock.get("/api/tp/summary").mock(
+        return_value=Response(200, json=payload)
+    )
+
+    async with Client(mcp_server) as client:
+        result = await client.call_tool("coach_get_training_state", {})
+
+    assert route.called
+    params = route.calls.last.request.url.params
+    to_d = date.today()
+    assert params["to_date"] == to_d.isoformat()
+    assert params["from_date"] == (to_d - timedelta(days=7)).isoformat()
+    assert _payload(result)["training_load"][0]["tsb"] == -5.0
+
+
+async def test_get_training_state_custom_days_back(mcp_server, api_mock):
+    route = api_mock.get("/api/tp/summary").mock(
+        return_value=Response(200, json={"training_load": []})
+    )
+
+    async with Client(mcp_server) as client:
+        await client.call_tool("coach_get_training_state", {"days_back": 30})
+
+    params = route.calls.last.request.url.params
+    to_d = date.today()
+    assert params["from_date"] == (to_d - timedelta(days=30)).isoformat()
+
+
+async def test_get_training_load(mcp_server, api_mock):
+    payload = [
+        {"date": "2026-08-10", "ctl": 54.2, "atl": 61.0, "tsb": -6.8},
+        {"date": "2026-08-11", "ctl": 54.5, "atl": 59.3, "tsb": -4.8},
+    ]
+    route = api_mock.get("/api/tp/training-load").mock(
+        return_value=Response(200, json=payload)
+    )
+
+    async with Client(mcp_server) as client:
+        result = await client.call_tool(
+            "coach_get_training_load",
+            {"from_date": "2026-08-10", "to_date": "2026-08-11"},
+        )
+
+    assert route.called
+    params = route.calls.last.request.url.params
+    assert params["from_date"] == "2026-08-10"
+    assert params["to_date"] == "2026-08-11"
+    assert _payload(result)[1]["ctl"] == 54.5
+
+
+async def test_get_workouts(mcp_server, api_mock):
+    payload = [
+        {
+            "id": "w-1",
+            "date": "2026-08-09",
+            "sport": "run",
+            "duration_s": 16200,
+            "tss": 210.0,
+        }
+    ]
+    route = api_mock.get("/api/tp/workouts").mock(
+        return_value=Response(200, json=payload)
+    )
+
+    async with Client(mcp_server) as client:
+        result = await client.call_tool(
+            "coach_get_workouts",
+            {"from_date": "2026-08-03", "to_date": "2026-08-09"},
+        )
+
+    assert route.called
+    params = route.calls.last.request.url.params
+    assert params["from_date"] == "2026-08-03"
+    assert params["to_date"] == "2026-08-09"
+    assert _payload(result)[0]["id"] == "w-1"
+
+
+async def test_get_workout_detail(mcp_server, api_mock):
+    payload = {
+        "id": "w-1",
+        "sport": "run",
+        "avg_hr": 152,
+        "tss": 210.0,
+        "zones": {"z2": 5400, "z3": 9000},
+    }
+    route = api_mock.get("/api/tp/workout/w-1").mock(
+        return_value=Response(200, json=payload)
+    )
+
+    async with Client(mcp_server) as client:
+        result = await client.call_tool(
+            "coach_get_workout_detail", {"workout_id": "w-1"}
+        )
+
+    assert route.called
+    body = _payload(result)
+    assert body["avg_hr"] == 152
+    assert body["zones"]["z3"] == 9000
+
+
+async def test_get_metrics(mcp_server, api_mock):
+    payload = [
+        {
+            "date": "2026-08-14",
+            "hrv_ms": 48.0,
+            "sleep_h": 7.2,
+            "body_battery": 62,
+            "weight_kg": 69.0,
+        }
+    ]
+    route = api_mock.get("/api/tp/metrics").mock(
+        return_value=Response(200, json=payload)
+    )
+
+    async with Client(mcp_server) as client:
+        result = await client.call_tool(
+            "coach_get_metrics",
+            {"from_date": "2026-08-14", "to_date": "2026-08-14"},
+        )
+
+    assert route.called
+    params = route.calls.last.request.url.params
+    assert params["from_date"] == "2026-08-14"
+    assert params["to_date"] == "2026-08-14"
+    assert _payload(result)[0]["hrv_ms"] == 48.0
+
+
+async def test_get_athlete(mcp_server, api_mock):
+    payload = {
+        "name": "Athlete",
+        "threshold_hr": 172,
+        "zones": [{"zone": "Z2", "min": 131, "max": 145}],
+    }
+    route = api_mock.get("/api/tp/athlete").mock(
+        return_value=Response(200, json=payload)
+    )
+
+    async with Client(mcp_server) as client:
+        result = await client.call_tool("coach_get_athlete", {})
+
+    assert route.called
+    body = _payload(result)
+    assert body["threshold_hr"] == 172
+    assert body["zones"][0]["zone"] == "Z2"
+
+
+async def test_get_nutrition(mcp_server, api_mock):
+    payload = [
+        {
+            "date": "2026-08-15",
+            "calories": 2100.0,
+            "protein_g": 130.0,
+            "carbs_g": 220.0,
+            "fat_g": 70.0,
+            "fiber_g": 28.0,
+            "sodium_mg": 2300.0,
+            "calories_goal": 2200.0,
+            "protein_goal_g": 120.0,
+            "alcohol_drinks": 0,
+        }
+    ]
+    route = api_mock.get("/api/nutrition").mock(
+        return_value=Response(200, json=payload)
+    )
+
+    async with Client(mcp_server) as client:
+        result = await client.call_tool(
+            "coach_get_nutrition",
+            {"from_date": "2026-08-15", "to_date": "2026-08-15"},
+        )
+
+    assert route.called
+    params = route.calls.last.request.url.params
+    assert params["from_date"] == "2026-08-15"
+    assert params["to_date"] == "2026-08-15"
+    body = _payload(result)
+    assert body[0]["protein_g"] == 130.0
+    assert body[0]["alcohol_drinks"] == 0
+
+
+async def test_get_meals(mcp_server, api_mock):
+    payload = {
+        "date": "2026-08-15",
+        "meals": {
+            "breakfast": [
+                {
+                    "name": "Oatmeal",
+                    "calories": 350.0,
+                    "protein_g": 12.0,
+                    "carbs_g": 60.0,
+                    "fat_g": 6.0,
+                    "position": 0,
+                }
+            ],
+            "lunch": [],
+            "dinner": [],
+            "snacks": [],
+            "other": [],
+        },
+        "totals": {"calories": 350.0},
+    }
+    route = api_mock.get("/api/nutrition/2026-08-15/meals").mock(
+        return_value=Response(200, json=payload)
+    )
+
+    async with Client(mcp_server) as client:
+        result = await client.call_tool("coach_get_meals", {"date": "2026-08-15"})
+
+    assert route.called
+    body = _payload(result)
+    assert body["meals"]["breakfast"][0]["name"] == "Oatmeal"
+    assert body["totals"]["calories"] == 350.0
+
+
+async def test_get_body_composition(mcp_server, api_mock):
+    payload = [
+        {"date": "2026-08-14", "weight_kg": 69.0, "body_fat_pct": 18.5},
+    ]
+    route = api_mock.get("/api/body-composition").mock(
+        return_value=Response(200, json=payload)
+    )
+
+    async with Client(mcp_server) as client:
+        result = await client.call_tool(
+            "coach_get_body_composition",
+            {"from_date": "2026-08-10", "to_date": "2026-08-14"},
+        )
+
+    assert route.called
+    params = route.calls.last.request.url.params
+    assert params["from_date"] == "2026-08-10"
+    assert params["to_date"] == "2026-08-14"
+    assert _payload(result)[0]["weight_kg"] == 69.0
 
 
 async def test_search_food(mcp_server, api_mock):

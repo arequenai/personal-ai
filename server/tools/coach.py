@@ -149,11 +149,11 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool
     async def coach_get_nutrition(from_date: str, to_date: str) -> Any:
-        """Devuelve macros diarios completos (calorías, proteína, carbos, grasa, fibra, sodio), goals, target adaptativo de calorías, y consumo de alcohol entre dos fechas.
+        """Devuelve macros diarios completos (calorías, proteína, carbos, grasa, fibra, sodio), goals y consumo de alcohol entre dos fechas.
 
         Úsalo cuando el usuario pregunte por adherencia al plan nutricional, déficit/superávit, evolución de proteína, ingesta de alcohol, o cualquier análisis de macros con detalle. Para una visión rápida del estado general (entrenamiento + recovery + nutrición agregada) usa coach_get_training_state.
 
-        Devuelve lista de dicts por día con: date, calories, protein_g, carbs_g, fat_g, fiber_g, sodium_mg, calories_goal, protein_goal_g, alcohol_drinks, calories_target_adaptive.
+        Devuelve lista de dicts por día con: date, calories, protein_g, carbs_g, fat_g, fiber_g, sodium_mg, calories_goal, protein_goal_g, alcohol_drinks.
         """
         return await _get(
             "/api/nutrition",
