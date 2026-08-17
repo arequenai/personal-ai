@@ -7,9 +7,15 @@ from fastmcp import FastMCP
 from server.config import settings
 
 
+def _auth_headers() -> dict[str, str]:
+    if settings.railway_api_key:
+        return {"X-API-Key": settings.railway_api_key}
+    return {}
+
+
 async def _get(path: str, params: dict[str, Any] | None = None) -> Any:
     async with httpx.AsyncClient(
-        base_url=settings.railway_api_base, timeout=30.0
+        base_url=settings.railway_api_base, timeout=30.0, headers=_auth_headers()
     ) as client:
         response = await client.get(path, params=params)
         response.raise_for_status()
@@ -18,7 +24,7 @@ async def _get(path: str, params: dict[str, Any] | None = None) -> Any:
 
 async def _post(path: str, json_body: dict[str, Any]) -> Any:
     async with httpx.AsyncClient(
-        base_url=settings.railway_api_base, timeout=30.0
+        base_url=settings.railway_api_base, timeout=30.0, headers=_auth_headers()
     ) as client:
         response = await client.post(path, json=json_body)
         response.raise_for_status()
@@ -27,7 +33,7 @@ async def _post(path: str, json_body: dict[str, Any]) -> Any:
 
 async def _delete(path: str, params: dict[str, Any] | None = None) -> None:
     async with httpx.AsyncClient(
-        base_url=settings.railway_api_base, timeout=30.0
+        base_url=settings.railway_api_base, timeout=30.0, headers=_auth_headers()
     ) as client:
         response = await client.delete(path, params=params)
         response.raise_for_status()
@@ -233,6 +239,8 @@ def register(mcp: FastMCP) -> None:
             force: Por defecto False. Pasa True solo si el usuario confirma duplicar tras un 409.
 
         Devuelve un dict con: entry_id (UUID, guárdalo para borrar con coach_delete_diary_entry), mfp_id, food_name, meal_type, date, quantity, unit, weight_id, calories, protein_g, carbs_g, fat_g.
+
+        Si el aggregator responde 409 (idempotency conflict), en lugar de propagar la excepción se devuelve un dict {"conflict": True, "detail": str, "hint": str}. El cliente debe comprobar `if result.get("conflict"):` para decidir si pedir confirmación al usuario antes de reintentar con force=True. Otros 4xx/5xx siguen propagándose como HTTPStatusError.
         """
         body: dict[str, Any] = {
             "mfp_id": mfp_id,
@@ -244,7 +252,20 @@ def register(mcp: FastMCP) -> None:
             body["date"] = date
         if unit is not None:
             body["unit"] = unit
-        return await _post("/api/nutrition/log", body)
+        try:
+            return await _post("/api/nutrition/log", body)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 409:
+                try:
+                    detail = e.response.json().get("detail", "Entry already exists")
+                except (ValueError, KeyError):
+                    detail = "Entry already exists"
+                return {
+                    "conflict": True,
+                    "detail": detail,
+                    "hint": "Set force=True to bypass idempotency and create the duplicate anyway.",
+                }
+            raise
 
     @mcp.tool
     async def coach_delete_diary_entry(entry_id: str, date: str) -> dict:
